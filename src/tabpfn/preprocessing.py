@@ -15,6 +15,7 @@ from typing_extensions import override
 
 import numpy as np
 from sklearn.utils.validation import joblib
+from sklearn.preprocessing import OrdinalEncoder
 
 from tabpfn.constants import (
     CLASS_SHUFFLE_OVERESTIMATE_FACTOR,
@@ -667,3 +668,56 @@ def fit_preprocessing(
             for config, seed in zip(configs, seeds)
         ],
     )
+
+
+def _fix_dtypes(X, cat_indices: list[int] | None = None) -> np.ndarray:
+    """
+    Convert the input data to a numpy array and fix data types for tabular data.
+
+    This function:
+      - Ensures the input is a numpy array.
+      - If `cat_indices` is provided, casts the columns at those indices to strings
+        so that they can be handled as categorical features by encoders.
+
+    Parameters:
+      X (array-like): The input data.
+      cat_indices (list[int], optional): Indices of columns to treat as categorical.
+
+    Returns:
+      np.ndarray: The data with adjusted dtypes.
+    """
+    # Ensure X is a numpy array.
+    if not isinstance(X, np.ndarray):
+        X = np.array(X)
+    
+    # If categorical columns are specified, cast them to string/object.
+    if cat_indices is not None:
+        # Create a copy to avoid modifying the original array.
+        X = X.copy()
+        for idx in cat_indices:
+            if idx < X.shape[1]:
+                # Convert the column to strings to indicate categorical data.
+                X[:, idx] = X[:, idx].astype(str)
+    
+    return X
+
+
+def _get_ordinal_encoder() -> OrdinalEncoder:
+    """
+    Create and return an OrdinalEncoder instance for converting categorical features
+    into ordinal integers.
+
+    The returned encoder is configured to handle unknown categories by encoding them as -1,
+    if the installed scikit-learn version supports this feature.
+
+    Returns:
+      OrdinalEncoder: An instance of the ordinal encoder.
+    """
+    try:
+        # scikit-learn versions 0.24 and above support handle_unknown.
+        encoder = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1)
+    except TypeError:
+        # For older scikit-learn versions, fallback to the default encoder.
+        encoder = OrdinalEncoder()
+    
+    return encoder
